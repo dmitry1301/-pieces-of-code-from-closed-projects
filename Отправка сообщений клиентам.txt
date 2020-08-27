@@ -1,0 +1,225 @@
+ class MailSender
+    {
+        public DateTime date;
+        public string NumberKuvd;
+        public string phone;
+        public string email;
+        public string adresssave;
+
+
+
+
+        public int Send()
+        {
+            Console.WriteLine(this);
+
+            SmtpClient Client = new SmtpClient("");
+            Client.DeliveryMethod = SmtpDeliveryMethod.Network;
+            MailMessage Message = new MailMessage();
+            Message.IsBodyHtml = true;
+            String mailBody = Properties.Resources.MailTEmplate;
+            
+            Dictionary<string, string> fields = new Dictionary<string, string>()
+                {
+                    
+                    {"{date}", date.ToString() },
+                    {"{NumberKUVD}", NumberKuvd },
+                    {"{phone}", phone },
+                    {"{email}", email },
+                    {"{adresssave}", adresssave },
+                    {"{adressmove}", adresssave},
+                    
+                };
+            foreach (KeyValuePair<string, string> field in fields)
+            {
+                mailBody = mailBody.Replace(field.Key, field.Value);
+            }
+            
+            Message.Body = mailBody;
+
+            Message.Subject = "";
+            Message.To.Add("");
+           //Message.To.Add(TextEmail.Text.ToString());
+           
+            Message.From = new MailAddress("");
+            Client.Send(Message);
+            Client.Dispose();
+            Console.WriteLine("Отправлено.");
+
+            return 1;
+        }
+    }
+
+
+
+
+
+     class Logger
+    {
+
+        public DataSet ds = new DataSet();
+        
+        public void Write()
+        {
+
+        }
+        public void Get()
+        {
+            string connectionString = @"";
+            SqlConnection cnn;
+            
+            cnn = new SqlConnection(connectionString);
+            //SqlCommand cmd = new SqlCommand();
+         
+
+            cnn.Open();
+            try
+            {
+                Console.WriteLine("Connection Open  !");
+                QueryEmployee(cnn);
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine("Error: " + e);
+                Console.WriteLine(e.StackTrace);
+            }
+            finally
+            {
+                cnn.Close();
+                cnn.Dispose();
+            }
+            
+        }
+        protected void QueryEmployee(SqlConnection conn)
+        {
+           
+            string query = "Select * from Logs";
+            SqlDataAdapter adapter = new SqlDataAdapter(query, conn);
+
+            adapter.Fill(ds);
+        }
+    }
+
+
+
+
+
+     class Getter
+    {
+        public DataSet ds = new DataSet();
+
+        public void GetData()
+        {
+
+            string sql = "";
+
+
+
+
+            string connectionString = @"";
+
+            MySqlConnection con = new MySqlConnection(connectionString);
+
+            con.Open();
+
+            MySqlDataAdapter adapter = new MySqlDataAdapter(sql, con);
+
+
+            adapter.Fill(ds);
+            con.Close();
+            con.Dispose();
+        }
+    }
+
+
+
+
+
+     class Program
+    {
+
+        static void Main(string[] args)
+        {
+
+
+            Logger logger = new Logger();
+            //DataSet dslog = new DataSet();
+
+            logger.Get();
+            DataSet logs = new DataSet();
+            logs = logger.ds;
+            DataTable dtL = logs.Tables[0];
+
+
+
+            Getter getter = new Getter();
+            getter.GetData();
+            DataSet gets = new DataSet();
+            gets = getter.ds;
+
+
+            DataTable dtg = gets.Tables[0];
+            List<string> d = new List<string>();
+
+            MailSender g = new MailSender();
+
+            foreach (DataRow rowG in dtg.Rows)
+            {
+
+                d.Add(rowG[1].ToString());
+                foreach (DataRow rowL in dtL.Rows)
+                {
+                    if (rowG[0] != rowL[0])
+                    {
+                        
+                        MailSender ms = new MailSender();
+                        //ms.id = rowG["id"].ToString();
+                        ms.date = DateTime.Now;
+                        ms.NumberKuvd = rowG["number"].ToString();
+                        ms.phone = rowG["phone"].ToString();
+                        ms.email = rowG["email"].ToString();
+                        string adr = rowG["city_type"].ToString() + ". " + rowG["city"] + ", " + rowG["street"].ToString();
+                        ms.adresssave = adr;
+
+                        try
+                        {
+                            ms.Send();
+                            //запись в бд лога(успешная отправка)
+                            DataSet ds = new DataSet("Logs");
+                            string connectionString = "";
+                            SqlConnection con = new SqlConnection(connectionString);
+                            con.Open();
+                            string queryString = "";
+                            SqlCommand sql = new SqlCommand(queryString, con);
+                            SqlDataAdapter ada = new SqlDataAdapter(sql);
+                            ada.Fill(logs);
+
+                            
+
+                        }
+                        
+                        catch(SystemException e)
+                        {
+                            Console.WriteLine(e.Message);
+                            //запись в бд(сообщение не отправилось)
+
+                            DataSet ds = new DataSet("Logs");
+                            string connectionString = "";
+                            SqlConnection con = new SqlConnection(connectionString);
+                            con.Open();
+                            string queryString = "";
+                            SqlCommand sql = new SqlCommand(queryString, con);
+                            SqlDataAdapter ada = new SqlDataAdapter(sql);
+                            ada.Fill(logs);
+
+                            con.Close();
+                        }
+
+                        
+                    }
+                }
+
+            }
+
+        }
+    }

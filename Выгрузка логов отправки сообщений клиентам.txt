@@ -1,0 +1,282 @@
+public class NoticeController : Controller
+    {
+        private int defaultCount = 50;
+        private NDreadySpamEntities4 db = new NDreadySpamEntities4();
+        List<SelectListItem> items = new List<SelectListItem>();
+
+        [Attributes.ActionTitle("Поиск")]
+        public ActionResult Index()
+        {
+            items.Add(new SelectListItem() { Text = "Все", Selected = true, Value = "0" });
+            items.Add(new SelectListItem() { Text = "О готовности документов к выдаче", Value = "1" });
+            items.Add(new SelectListItem() { Text = "О месте хранения документов", Value = "2" });
+            ViewBag.Datas = items;
+            return View();
+        }
+
+        [Attributes.ActionTitle("Лог выгрузок")]
+        public ActionResult Logs()
+        {
+            var model = db.Results.Take(defaultCount);
+            return View(model.OrderByDescending(m => m.Date));
+        }
+
+        [HttpPost]
+        [Attributes.ActionTitle("Поиск")]
+        public ActionResult Filter(Models.Filter filter, string myDDL)
+        {
+            var notice = from a in db.Log
+                         where (string.IsNullOrEmpty(filter.NK) ? true : a.NomberKuvd.StartsWith(filter.NK)) &&
+                         (string.IsNullOrEmpty(filter.FIO) ? true : a.FIO.Contains(filter.FIO)) &&
+                         (string.IsNullOrEmpty(filter.Email) ? true : a.email.Contains(filter.Email)) &&
+                         (filter.SendSDate.HasValue ? a.date >= filter.SendSDate : true) &&
+                         (filter.SendEDate.HasValue ? a.date <= filter.SendEDate : true)
+                         where (myDDL.ToString() == "1" && a.type == 1) ||
+                         (myDDL.ToString() == "2" && a.type == 2) ||
+                         (myDDL.ToString() == "0")
+                         select a;
+
+            ViewBag.Filter = filter;
+            ViewBag.Total = notice.Count();
+            ViewBag.Sended = notice.Count(a => a.Success == 1);
+
+            return View(notice);
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                db.Dispose();
+            }
+            base.Dispose(disposing);
+        }
+    }
+
+
+
+
+
+
+@model slgo.Models.Filter
+<html>
+<body>
+
+
+    @using (Html.BeginForm("Filter", "Notice", FormMethod.Post, new { id = "actForm" }))
+    {
+        @Html.AntiForgeryToken()
+        <div class="alert alert-danger hide" role="alert" id="dateIncorrText">
+            <span class="glyphicon glyphicon-exclamation-sign" aria-hidden="true"></span>
+            <span class="sr-only">Error:</span>
+            Введите корректный период (дата не может быть в будущем времени, начало периода не может быть больше его окончания)
+        </div>
+        <div class="alert alert-danger hide" role="alert" id="dateErrText">
+            <span class="glyphicon glyphicon-exclamation-sign" aria-hidden="true"></span>
+            <span class="sr-only">Error:</span>
+            Заполнте оба поля с датой
+        </div>
+
+        <div class="row">
+            <div class="col-6 row p-0 m-0">
+                <div class="p-0 m-0 col-auto">@Html.LabelFor(model => model.NK, new { htmlAttributes = new { @class = "" } }):</div>
+
+                <div class="m-0 col">@Html.EditorFor(model => model.NK, new { htmlAttributes = new { @class = "form-control" } })</div>
+            </div>
+            <div class="col-6 row p-0 m-0">
+                <div class="p-0 m-0 col-auto">@Html.LabelFor(model => model.Notice, new { htmlAttributes = new { @class = "" } }): </div>
+                <div class="m-0 col">
+                    @Html.DropDownList("myDDL", (IEnumerable<SelectListItem>)ViewBag.Datas, htmlAttributes: new { @class = "form-control" })
+                </div>
+            </div>
+        </div>
+
+        <br />
+        <div class="row">
+            <div class="col-12 m-0 p-0">
+                <p class=" m-0 p-0"> Дата отправки:</p><br />
+            </div>
+        </div>
+
+        <div class="row input-daterange">
+            <div class="col-6 row p-0 m-0">
+                <div class="p-0 m-0 col-auto">
+                    @Html.LabelFor(model => model.SendSDate):
+                </div>
+                <div class="m-0 col input-group date input-daterange">
+                    @*<input type="text" class="form-control" value="@(Model.SendSDate.HasValue?((DateTime)Model.SendSDate).ToShortDateString():"")">*@
+                    @Html.EditorFor(model => model.SendSDate, new { htmlAttributes = new { @class = "form-control" } })
+                    <div class="input-group-addon col-auto m-0 btn btn-secondary" onclick="focusStart()"><i class="far fa-calendar-alt"></i></div>
+                </div>
+            </div>
+
+            <div class="col-6 row p-0 m-0">
+                <div class="m-0 p-0 col-auto">
+                    @Html.LabelFor(model => model.SendEDate):
+                </div>
+                <div class="m-0 col input-group date input-daterange">
+                    @*<input type="text" class="form-control" value="@(Model.SendSDate.HasValue?((DateTime)Model.SendSDate).ToShortDateString():"")">*@
+                    @Html.EditorFor(model => model.SendEDate, new { htmlAttributes = new { @class = "form-control" } })
+                    <div class="input-group-addon col-auto m-0 btn btn-secondary" onclick="focusEnd()"><i class="far fa-calendar-alt"></i></div>
+                </div>
+            </div>
+        </div>
+
+
+        <br />
+        <div class="row">
+            <div class="col-md-12 text-center">
+
+            </div>
+        </div>
+        <br />
+
+        <div class="row">
+            <div class="col-6 row p-0 m-0">
+                <div class="p-0 m-0 col-auto">@Html.LabelFor(model => model.FIO, new { htmlAttributes = new { @class = "" } }):</div>
+
+                <div class="m-0 col">@Html.EditorFor(model => model.FIO, new { htmlAttributes = new { @class = "form-control" } })</div>
+            </div>
+            <div class="col-6 row p-0 m-0">
+                <div class="p-0 m-0 col-auto">@Html.LabelFor(model => model.Email, new { htmlAttributes = new { @class = "" } }):</div>
+
+                <div class="m-0 col">@Html.EditorFor(model => model.Email, new { htmlAttributes = new { @class = "form-control" } })</div>
+            </div>
+        </div>
+
+        <br />
+        <button class="btn btn-primary" type="submit">Искать</button>
+        <button class="btn btn-primary" type="button" onclick="clearInpus()">Очистить</button>
+    }
+
+    @Scripts.Render("~/bundles/bootstrap-datepicker")
+
+
+    <script type="text/javascript">
+
+        $('.input-daterange input').each(function () {
+            $(this).datepicker({
+                todayBtn: true,
+                language: "ru",
+                format: "dd.mm.yyyy",
+                autoclose: true,
+                todayHighlight: true
+            });
+        });
+        function clearInpus() {
+            $('#actForm input').val('');
+        }
+
+        function invalideDate() {
+            $('.input-daterange input').addClass('errorInput');
+            $('#dateIncorrText').removeClass('hide');
+            $('.input-daterange.date').datepicker();
+        }
+        function focusStart() { $('input[name$="SendSDate"]').focus() }
+        function focusEnd() { $('input[name$="SendEDate"]').focus() }
+        function needDate() {
+            $('.input-daterange input').addClass('errorInput');
+            $('#dateErrText').removeClass('hide');
+            $('.input-daterange.date').datepicker();
+
+        }
+
+        function isDateOk() {
+            var date1 = $('.input-daterange input')[0].value;
+            var date2 = $('.input-daterange input')[1].value;
+            if ((date1 != "") && (date2 != "")) {
+                dateOk();
+            }
+        }
+
+        function needDate() {
+            $('.input-daterange input').addClass('errorInput');
+            $('#dateErrText').removeClass('hide');
+            $('.input-daterange.date').datepicker();
+
+        }
+        function dateOk() {
+            $('.input-daterange input').removeClass('errorInput');
+            $('#dateErrText').addClass('hide');
+
+        }
+    </script>
+    <style>
+        .input-group.date .input-group-addon {
+            cursor: pointer;
+        }
+
+        .hide {
+            display: none !important;
+        }
+    </style>
+</body>
+</html>
+
+
+
+
+
+
+
+
+
+@model IEnumerable<slgo.Models.Results>
+
+<table class="table">
+    <tr style="text-align: center">
+        <th>
+            Отправлено сообщений
+        </th>
+        <th>
+            Тип уведомления
+        </th>
+        <th>
+            Затраченное время
+        </th>
+        <th>
+            Время
+        </th>
+        <th>
+            Дата
+        </th>
+    </tr>
+    @foreach (var item in Model)
+    {
+<tr style="text-align: center">
+    <td>
+        @Html.DisplayFor(modelItem => item.SentMsg)
+    </td>
+
+    <td>
+        @{
+            string type;
+            if (item.Type == 1)
+            {
+                type = "Дата готовности документов к выдаче";
+            }
+            else
+            {
+                type = "Дата передачи документов на хранение";
+            }
+
+        }
+
+
+        @type
+    </td>
+    <td>
+        @(((TimeSpan)item.TimeForDoing).ToString(@"hh\:mm\:ss"))
+    </td>
+    <td>
+        @(((TimeSpan)item.Time).ToString(@"hh\:mm"))
+    </td>
+    <td>
+        @(((DateTime)item.Date).ToShortDateString())
+    </td>
+
+
+</tr>
+    }
+
+</table>

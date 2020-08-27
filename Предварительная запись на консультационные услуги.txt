@@ -1,0 +1,551 @@
+public class ChatHub : Hub
+    {
+        public async Task SendMessage(string user, string leading, string message, string window, int ID, string Edit, string whoedit)
+
+        {
+
+            UserPrincipal UserP = OnGet(whoedit.Split('\\')[1]);
+
+            string editor = UserP.Surname +" "+ UserP.GivenName;
+            
+
+            //string userName1 = System.DirectoryServices;
+            SaveToDb(user, message, window, leading, ID, editor);
+            using (var context = new AppDbContext())
+            {
+
+                var hEdit = context.PredZapBD.Where(b => b.Id == ID).Select(b => b.EDIT);
+                Edit = hEdit.ToList().First();
+            }
+            await Clients.All.SendAsync("ReceiveMessage", user, leading, message, window, ID, Edit);
+        }
+
+
+
+
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Globalization", "CA1305:Укажите IFormatProvider", Justification = "<Ожидание>")]
+        private void SaveToDb(string user, string message, string window, string leading, int ID, string editor)
+        {
+            //whoedit = whoedit.Trim('\');
+            using (var context = new AppDbContext())
+            {
+                var g = context.PredZapBD.SingleOrDefault(b => b.Id == ID);
+                if (g != null)
+                {
+                    DateTime aDate = DateTime.Now;
+                    string time = aDate.ToString("dd/MM/yyyy HH:mm:ss");
+
+                    g.EDIT = g.EDIT + "\n<p> Изменил(а) " + editor + " в [" + time + " ] с " + g.FIO + " " + g.LEADING + " на " + user + " " + leading + "</p>";
+                    g.FIO = user;
+                    g.LEADING = leading;
+                    context.SaveChanges();
+                }
+
+
+            }
+        }
+        public UserPrincipal OnGet(string name)
+        {
+            var username = name;
+            using (var context = new PrincipalContext(ContextType.Domain, "FKP02"))
+            {
+                var user = UserPrincipal.FindByIdentity(context, username);
+                if (user != null)
+                {
+                    return user;
+                }
+                return null;
+            }
+
+        }
+
+    }
+
+
+    //здесь обработку некоторых данных, можно было поместить в другой контроллер, но так как горели сроки, было решено поместить в один, для запуска тестов
+    public class HomeController : Controller
+    {
+        private readonly ILogger<HomeController> _logger;
+
+        [HttpGet]
+        [ActionName("Delete")]
+        public async Task<IActionResult> ConfirmDelete(int? id)
+        {
+            using(var context = new AppDbContext())
+            {
+                if (id != null)
+                {
+                    User user = await context.User.FirstOrDefaultAsync(p => p.Id == id);
+                    if (user != null)
+                        return View(user);
+                }
+                return NotFound();
+            }
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> Delete(int? id)
+        {
+            using(var context = new AppDbContext())
+            {
+                if (id != null)
+                {
+                    User user = new User { Id = id.Value };
+                    context.Entry(user).State = EntityState.Deleted;
+                    await context.SaveChangesAsync();
+                    return RedirectToAction("First");
+                }
+                return NotFound();
+            }
+        }
+
+        public async Task<IActionResult> Edit(int? id)
+        {
+            using(var context = new AppDbContext())
+            {
+                if (id != null)
+                {
+                    User user = await context.User.FirstOrDefaultAsync(p => p.Id == id);
+                    if (user != null)
+                        return View(user);
+                }
+                return NotFound();
+            }
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> Edit(User user)
+        {
+            using(var context = new AppDbContext())
+            {
+                context.User.Update(user);
+                await context.SaveChangesAsync();
+                return RedirectToAction("First");
+            }
+        }
+
+        public IActionResult AddUser()
+        {
+            return View();
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> AddUser(User user)
+        {
+            using(var context = new AppDbContext())
+            {
+                context.User.Add(user);
+                await context.SaveChangesAsync();
+                return RedirectToAction("First");
+            }
+        }
+
+        public IActionResult AdminPanelIndex()
+        {
+            return View();
+        }
+
+        public HomeController(ILogger<HomeController> logger)
+        {
+            _logger = logger;
+        }
+
+        public IActionResult Index()
+        {
+            return View();
+        }
+
+        public IActionResult First(string user)
+        {
+            using (var context = new AppDbContext())
+            {
+                return View(context.User.ToList());
+
+            }
+        }
+
+        public IActionResult Adminpanel(string user)
+        {
+            user = user.Split('\\')[1];
+            try
+            {
+                using (var context = new AppDbContext())
+                {
+                    var checkuser = context.User.Where(b => b.Name == user);
+                    if (checkuser.ToList()[0].Status)
+                    {
+
+                        return View();
+                    };
+                    return View("Index");
+
+                }
+            }
+            catch
+            {
+                   return View("Index");
+
+            }
+
+        }
+        [HttpGet("AdminWindows")]
+        public JsonResult AdminWindows()
+        {
+            List<windows> win1 = new List<windows>();
+            using (var context =new AppDbContext())
+            {
+                var windows = context.Windows;
+                
+                foreach (var item in windows)
+                 
+                {
+                    win1.Add(new windows
+                    {
+                        Id = item.Id,
+                        Name = item.Name,
+                        Status = item.Status
+                    }) ;
+                }
+
+
+            }
+            return Json(win1);
+
+
+            //return Json("тетс");
+        }
+
+        [HttpPost("ChangeStatusWindows")]
+        public string ChangeStatusWindows(string id, bool status)
+        {
+
+            //int selected = int.Parse(id);
+            using (var context = new AppDbContext())
+            {
+                var id1 = int.Parse(id);
+
+                var change = context.Windows.SingleOrDefault(b => b.Id == id1);
+
+                change.Status = status;
+                context.SaveChanges();
+
+            }
+
+            return "good";
+            //return Json("тетс");
+        }
+
+       
+
+       [HttpPost("addLogin")]
+        public string addLogin(string name)
+        {
+
+            //int selected = int.Parse(id);
+            using (var context = new AppDbContext())
+            {
+
+
+                var change = context.User.Add(new User
+                {
+                    Name = name,
+                    Status= true
+                });
+
+                context.SaveChanges();
+
+            }
+
+            return "good";
+            //return Json("тетс");
+        }
+        [ResponseCache(Duration = 0, Location = ResponseCacheLocation.None, NoStore = true)]
+        public IActionResult Error()
+        {
+            return View(new ErrorViewModel { RequestId = Activity.Current?.Id ?? HttpContext.TraceIdentifier });
+        }
+
+        [HttpGet("GetWindows")]
+        public JsonResult GetWindows(string date)
+        {
+
+
+
+            if (date != null)
+            {
+
+
+                using (var context = new AppDbContext())
+                {
+                    //Получение времени записи
+                    var times1 = context.Times;
+                    //Получение ОКОН
+                    var windows = context.Windows;
+
+                    var r = context.PredZapBD.Where(b => b.DATE == date); //поменять на приходящую дату
+                    int h = context.Windows.ToList().Count * context.Times.ToList().Count;
+
+
+                    DateTime aDate = DateTime.Now;
+                    string TTTT = aDate.ToString("dd/MM/yyyy HH:mm:ss");
+
+
+                    if (r.ToList().Count < h)
+                    {
+
+                        foreach (var item in r)
+                        {
+                            context.PredZapBD.Remove(item);
+                        }
+                        context.SaveChanges();
+
+                        foreach (var window in windows)
+                        {
+                            foreach (var time in times1)
+                            {
+                                context.PredZapBD.Add(new PredZapBD
+                                {
+
+                                    DATE = date,
+                                    WINDOW = window.Name,
+                                    TIME = time.Name,
+                                    EDIT = "<p>Создано автоматически [" + TTTT + "]</p>"
+                                });
+                            }
+                        }
+                        context.SaveChanges();
+
+
+                    }
+
+
+                    List<ParseJson> jjj = new List<ParseJson>();
+                    List<HR> ttt = new List<HR>();
+
+                    foreach (var window in windows)
+                    {
+
+                        foreach (var time in times1)
+                        {
+                            var c = context.PredZapBD.Where(b => b.WINDOW == window.Name && b.TIME == time.Name && b.DATE == date).ToList()[0];
+                            ttt.Add(new HR
+                            {
+                                Name = c.TIME,
+                                Leading = c.LEADING,
+                                Person = c.FIO,
+                                id = c.Id,
+                                Edit = c.EDIT
+                            });
+                        }
+
+                        jjj.Add(new ParseJson()
+                        {
+                            Name = window.Name,
+                            Hr = ttt.ToList(),
+                            active = window.Status,
+
+                        });
+                        ttt.Clear();
+                    }
+
+                    return Json(jjj);
+                }
+
+            }
+            return Json("ОТСУТВУЕТ ДАТА");
+
+        }
+
+
+        [HttpGet("GetDay")]
+        public string GetDay(string date)
+        {
+            string i;
+            using (var context = new AppDbContext())
+            {
+                try
+                {
+                    var status = context.Holidays.Where(b => b.Date == date).Select(b => b.Status).ToList();
+#pragma warning disable CA1305 // Укажите IFormatProvider
+                    i = status.First().ToString();
+#pragma warning restore CA1305 // Укажите IFormatProvider
+                }
+                catch
+                {
+                    i = "0";
+                }
+
+            }
+            if (i == "0")
+            {
+                return "work";
+            }
+            else
+            {
+                return "not";
+
+            }
+
+
+        }
+    }
+
+
+
+
+<link rel="stylesheet" type="text/css" href="~/Styles/StyleSheet.min.css">
+
+<div>
+
+
+
+    <div class="header">
+        <div class="logo">
+            <img src="~/img/Group 6.svg" idth="175" height="45" alt="image description" />
+        </div>
+        <div class="title">
+            Предварительная запись на консультационные услуги
+        </div>
+
+    </div>
+    <div id="chatApp">
+        <div class="upper">
+
+            <button class="nextweek" v-on:click="week-=1">
+                <img src="~/img/Vector-1.svg" />
+
+            </button>
+
+            <button v-for="(n,index) in days" v-bind:class="[n.status, n.active]" :disabled="n.status=='not holiday' || n.active=='activate' || n.status=='not' " v-on:click="radioClick($event);$emit(NUE($event), $event.target.checked)" v-bind:id="index">
+                <span>{{n.name}}</span>
+                <span>{{n.date}}</span>
+
+
+            </button>
+            <button class="nextweek" v-on:click="week+=1">
+                <img src="~/img/Vector.svg" />
+
+            </button>
+
+            <script>
+
+                function isPut() {
+                    window.location = "Home/AdminPanelIndex"
+                }
+
+            </script>
+
+            <button onclick="isPut()">
+
+                <img src="~/img/admin 2.svg" />
+
+            </button>
+
+        </div>
+
+        <div class="works">
+            <ul class="times">
+                <li>8:30</li>
+                <li>9:00</li>
+                <li>10:00</li>
+                <li>11:00</li>
+                <li>12:00</li>
+                <li>13:30</li>
+                <li>14:00</li>
+                <li>15:00</li>
+                <li>16:00</li>
+                <li>16:30</li>
+
+
+            </ul>
+            <windows-info v-for="n in windows" v-bind="n" v-bind:key="n.id"></windows-info>
+        </div>
+    </div>
+
+
+    <template id="window">
+        <div class="window" v-bind:class="{disabledbutton:active==false}">
+            <div class="title">
+                {{ name }}
+            </div>
+            <hr-info v-for="(n,index) in hr" v-bind="n" v-bind:data="n" v-bind:key="n.id"></hr-info>
+        </div>
+    </template>
+
+    <template id="hr">
+        <div class="hr">
+
+            <button id="show-modal" class="inputButton" v-bind:class="person  ? '':'empty'" v-on:click="showModal=true">
+                <span>{{person}}</span>
+                <span>{{leading}}</span>
+            </button>
+
+
+            <img v-bind:data-tooltip="edit" flow="down" src="~/img/info.svg" idth="20" height="20" alt="image description" />
+
+            <modal v-if="showModal" v-on:close="showModal = false">
+
+
+                <div slot="body">
+                    Фамилия И.О. заявителя
+                    <input type="text" v-bind:value.sync="person" id="person" />
+                    Лицо, привлекшее заявителя
+                    <input type="text" v-bind:value.sync="leading" id="leading" />
+
+                </div>
+            </modal>
+
+
+        </div>
+    </template>
+
+</div>
+
+<script src="~/js/signalr/dist/browser/signalr.js"></script>
+
+<script src="~/js/jquery.min.js"></script>
+<script src="~/js/axios.min.js"></script>
+<script src="~/js/lodash.min.js"></script>
+<script src="~/js/vue.js"></script>
+<script src="~/js/MyApp.js"></script>
+<script src="~/js/tooltip.js"></script>
+<script type="text/x-template" id="modal-template">
+    <transition name="modal">
+        <div class="modal-mask">
+            <div class="modal-wrapper" id="modal-wrapper" @*v-on:click="close($event)"*@>
+                <div class="modal-container">
+
+                    <div class="modal-header">
+                        <slot name="header">
+                            <div>
+                                Введите данные
+                            </div>
+                        </slot>
+                        <button class="close" v-on:click="$emit('close')">
+                            <img src="img/x.svg" class="imgClose" idth="20" width="20">
+                        </button>
+
+
+
+                    </div>
+
+                    <div class="modal-body">
+                        <slot name="body">
+                            default body
+                        </slot>
+                    </div>
+
+                    <div class="modal-footer">
+                        <slot name="footer">
+
+                        </slot>
+                        <button class="modal-default-button" v-on:click="$emit('close');onChange($event);">
+                            Сохранить
+                        </button>
+
+                    </div>
+                </div>
+            </div>
+        </div>
+    </transition>
+</script>
